@@ -23,6 +23,14 @@ if (System.getenv('BUILD_NUMBER') != null) {
 }
 
 repos()
+repositories {
+    maven {
+        url "https://maven.squiddev.cc"
+        content {
+            includeGroup("cc.tweaked")
+        }
+    }
+}
 at()
 runs()
 jars()
@@ -37,6 +45,9 @@ dependencies {
     jei()
     mcjtylib()
     rftoolsbase()
+
+    compileOnly("cc.tweaked:cc-tweaked-$minecraft_version-forge-api:$cctVersion")
+    runtimeOnly("cc.tweaked:cc-tweaked-$minecraft_version-forge:$cctVersion")
 }
 
 cfdeps(['the-one-probe'], ['mcjtylib', 'rftools-base'], [])

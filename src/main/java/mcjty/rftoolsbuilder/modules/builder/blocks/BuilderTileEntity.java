@@ -282,6 +282,10 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         return items.getStackInSlot(SLOT_TAB).getItem() instanceof ShapeCardItem;
     }
 
+    public ItemStack getCard() {
+        return items.getStackInSlot(SLOT_TAB);
+    }
+
     private BlockPos getScan() {
         return getData(BuilderModule.BUILDER_DATA).scan();
     }
@@ -420,7 +424,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         }
     }
 
-    private void onDataChanged(BuilderData oldData, BuilderData newData) {
+    public void onDataChanged(BuilderData oldData, BuilderData newData) {
         if (level.isClientSide()) {
             return;
         }
@@ -2096,7 +2100,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         }
     }
 
-    private BuilderData restartScan(BuilderData data) {
+    public BuilderData restartScan(BuilderData data) {
         data = data.withLastError(null);
         chunkUnload();
         if (data.flags().loopMode() || (isMachineEnabled() && data.scan() == null)) {
@@ -2251,7 +2255,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         return data;
     }
 
-    private void refreshSettings() {
+    public void refreshSettings() {
         BuilderData data = getData(BuilderModule.BUILDER_DATA);
         data = clearSupportBlocks(data);
         cachedBlocks = null;
