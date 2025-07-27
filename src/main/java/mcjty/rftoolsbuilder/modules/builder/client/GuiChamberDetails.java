@@ -2,11 +2,11 @@ package mcjty.rftoolsbuilder.modules.builder.client;
 
 import mcjty.lib.base.StyleConfig;
 import mcjty.lib.client.RenderHelper;
-import mcjty.lib.gui.GuiItemScreen;
-import mcjty.lib.gui.ManualEntry;
-import mcjty.lib.gui.Window;
+import mcjty.lib.gui.*;
 import mcjty.lib.gui.layout.HorizontalAlignment;
 import mcjty.lib.gui.widgets.*;
+import mcjty.rftoolsbuilder.modules.builder.items.ShapeCardItem;
+import mcjty.rftoolsbuilder.modules.builder.network.PacketUpdateCardInPlayer;
 import mcjty.rftoolsbuilder.setup.CommandHandler;
 import mcjty.rftoolsbuilder.setup.RFToolsBuilderMessages;
 import net.minecraft.client.Minecraft;
@@ -15,20 +15,20 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static mcjty.lib.gui.layout.AbstractLayout.DEFAULT_SPACING;
 import static mcjty.lib.gui.widgets.Widgets.*;
 
-public class GuiChamberDetails extends GuiItemScreen {
+public class GuiChamberDetails extends GuiItemScreen implements IKeyReceiver {
 
     private static final int CHAMBER_XSIZE = 390;
     private static final int CHAMBER_YSIZE = 210;
@@ -44,6 +44,9 @@ public class GuiChamberDetails extends GuiItemScreen {
     private WidgetList blockList;
     private Label infoLabel;
     private Label info2Label;
+    private TextField offsetX;
+    private TextField offsetY;
+    private TextField offsetZ;
 
     public GuiChamberDetails() {
         super(CHAMBER_XSIZE, CHAMBER_YSIZE,  /* @todo 1.14 GuiProxy.GUI_MANUAL_SHAPE*/ ManualEntry.EMPTY);
@@ -72,6 +75,12 @@ public class GuiChamberDetails extends GuiItemScreen {
     public void init() {
         super.init();
 
+        ItemStack heldItem = getStackToEdit();
+        if (heldItem.isEmpty()) {
+            // Cannot happen!
+            return;
+        }
+
         blockList = new WidgetList().name("blocks");
         Slider listSlider = new Slider().desiredWidth(10).vertical().scrollableName("blocks");
         Panel listPanel = horizontal(3, 1).children(blockList, listSlider);
@@ -81,7 +90,16 @@ public class GuiChamberDetails extends GuiItemScreen {
         info2Label = new Label().horizontalAlignment(HorizontalAlignment.ALIGN_LEFT);
         info2Label.desiredWidth(380).desiredHeight(14);
 
-        Panel toplevel = vertical(3, 1).filledRectThickness(2).children(listPanel, infoLabel, info2Label);
+        BlockPos offset = ShapeCardItem.getOffset(heldItem);
+
+        offsetX = new TextField().event((newText) -> updateSettings()).text(String.valueOf(offset.getX()));
+        offsetY = new TextField().event((newText) -> updateSettings()).text(String.valueOf(offset.getY()));
+        offsetZ = new TextField().event((newText) -> updateSettings()).text(String.valueOf(offset.getZ()));
+        Panel offsetPanel = horizontal(0, DEFAULT_SPACING).desiredHeight(18).children(
+                label("Offset:").horizontalAlignment(HorizontalAlignment.ALIGN_RIGHT).desiredWidth(40),
+                offsetX, offsetY, offsetZ);
+
+        Panel toplevel = vertical(3, 1).filledRectThickness(2).children(offsetPanel, listPanel, infoLabel, info2Label);
         toplevel.bounds(guiLeft, guiTop, xSize, ySize);
 
         window = new Window(this, toplevel);
@@ -189,11 +207,78 @@ public class GuiChamberDetails extends GuiItemScreen {
 
     @Override
     protected void renderInternal(GuiGraphics graphics, int pMouseX, int pMouseY, float partialTick) {
-        populateLists();
+         populateLists();
         drawWindow(graphics, pMouseX, pMouseY, partialTick);
     }
 
     public static void open() {
         Minecraft.getInstance().setScreen(new GuiChamberDetails());
     }
+
+    private static int parseInt(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private ItemStack getStackToEdit() {
+        return getMinecraft().player.getItemInHand(InteractionHand.MAIN_HAND);
+    }
+
+    private void updateSettings() {
+        ItemStack stack = getStackToEdit();
+        if (!stack.isEmpty()) {
+            int x = parseInt(offsetX.getText());
+            System.out.println(x);
+            ShapeCardItem.setOffset(stack, x, parseInt(offsetY.getText()), parseInt(offsetZ.getText()));
+            RFToolsBuilderMessages.sendToServer(PacketUpdateCardInPlayer.create(stack));
+        }
+    }
+
+    @Override
+    public Window getWindow() {
+        return window;
+    }
+
+    @Override
+    public void keyTypedFromEvent(int keyCode, int scanCode) {
+        if (window != null) {
+            if (window.keyTyped(keyCode, scanCode)) {
+                super.keyPressed(keyCode, scanCode, 0); // @todo 1.14: modifiers?
+            }
+        }
+    }
+
+    @Override
+    public void charTypedFromEvent(char codePoint) {
+        if (window != null) {
+            if (window.charTyped(codePoint)) {
+                super.charTyped(codePoint, 0); // @todo 1.14: modifiers?
+            }
+        }
+    }
+
+    @Override
+    public boolean mouseClickedFromEvent(double x, double y, int button) {
+        WindowManager manager = getWindow().getWindowManager();
+        manager.mouseClicked(x, y, button);
+        return true;
+    }
+
+    @Override
+    public boolean mouseReleasedFromEvent(double x, double y, int button) {
+        WindowManager manager = getWindow().getWindowManager();
+        manager.mouseReleased(x, y, button);
+        return true;
+    }
+
+    @Override
+    public boolean mouseScrolledFromEvent(double x, double y, double dx, double dy) {
+        WindowManager manager = getWindow().getWindowManager();
+        manager.mouseScrolled(x, y, dx, dy);
+        return true;
+    }
+
 }

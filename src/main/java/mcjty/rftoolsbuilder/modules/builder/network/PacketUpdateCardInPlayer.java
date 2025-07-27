@@ -2,6 +2,7 @@ package mcjty.rftoolsbuilder.modules.builder.network;
 
 import mcjty.rftoolsbuilder.RFToolsBuilder;
 import mcjty.rftoolsbuilder.modules.builder.items.ShapeCardItem;
+import mcjty.rftoolsbuilder.modules.builder.items.SpaceChamberCardItem;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -25,7 +26,7 @@ public record PacketUpdateCardInPlayer(ItemStack stack) implements CustomPacketP
     }
 
     private boolean isValidItem(ItemStack stack) {
-        return stack.getItem() instanceof ShapeCardItem;
+        return stack.getItem() instanceof ShapeCardItem || stack.getItem() instanceof SpaceChamberCardItem;
     }
 
     @Override

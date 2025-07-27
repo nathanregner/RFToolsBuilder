@@ -622,7 +622,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         }
     }
 
-    private void createProjection(BuilderData data, SpaceChamberRepository.SpaceChamberChannel chamberChannel) {
+    private void createProjection(ItemStack chamberCard, BuilderData data, SpaceChamberRepository.SpaceChamberChannel chamberChannel) {
         BlockPos minC = rotate(chamberChannel.getMinCorner());
         BlockPos maxC = rotate(chamberChannel.getMaxCorner());
         BlockPos minCorner = new BlockPos(Math.min(minC.getX(), maxC.getX()), Math.min(minC.getY(), maxC.getY()), Math.min(minC.getZ(), maxC.getZ()));
@@ -658,9 +658,14 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
             }
         }
         projDy = yCoord - minCorner.getY() - ((anchor == ANCHOR_NE || anchor == ANCHOR_NW) ? spanY : 0);
+
+        var offset = ShapeCardItem.getClampedOffset(chamberCard, BuilderConfiguration.maxBuilderOffset.get());
+        projDx += offset.getX();
+        projDy += offset.getY();
+        projDz += offset.getZ();
     }
 
-    private BuilderData calculateBox(BuilderData data, int channel) {
+    private BuilderData calculateBox(ItemStack chamberCard, BuilderData data, int channel) {
         SpaceChamberRepository repository = SpaceChamberRepository.get(level);
         SpaceChamberRepository.SpaceChamberChannel chamberChannel = repository.getChannel(channel);
         BlockPos minCorner = chamberChannel.getMinCorner();
@@ -679,7 +684,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         boxValid = true;
         cardType = ShapeCardType.CARD_SPACE;
 
-        createProjection(data, chamberChannel);
+        createProjection(chamberCard, data, chamberChannel);
 
         data = data.withMinBox(minCorner).withMaxBox(maxCorner);
         data = restartScan(data);
@@ -930,7 +935,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
             return Pair.of(data, null);
         }
 
-        data = calculateBox(data, shapeData.channel());
+        data = calculateBox(card, data, shapeData.channel());
 
         if (!boxValid) {
             return Pair.of(data, null);

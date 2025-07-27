@@ -2,6 +2,7 @@ package mcjty.rftoolsbuilder.modules.builder.items;
 
 import mcjty.lib.builder.TooltipBuilder;
 import mcjty.lib.tooltips.ITooltipSettings;
+import mcjty.lib.varia.BlockPosTools;
 import mcjty.lib.varia.Logging;
 import mcjty.lib.varia.Tools;
 import mcjty.rftoolsbuilder.RFToolsBuilder;
@@ -12,7 +13,6 @@ import mcjty.rftoolsbuilder.modules.builder.client.GuiChamberDetails;
 import mcjty.rftoolsbuilder.modules.builder.data.ShapeCardData;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -38,8 +38,9 @@ public class SpaceChamberCardItem extends Item implements ITooltipSettings {
             .infoShift(header(), gold(),
                     parameter("cost", this::getCostDescription),
                     parameter("channel", this::getChannelDescription),
+                    parameter("offset", this::getOffset),
                     general("extra", ChatFormatting.GRAY)
-                    ));
+            ));
 
     private String getCostDescription(ItemStack stack) {
         return BuilderConfiguration.builderRfPerOperation.get() + " RF/t per block";
@@ -53,6 +54,10 @@ public class SpaceChamberCardItem extends Item implements ITooltipSettings {
         } else {
             return "Channel is not set!";
         }
+    }
+
+    public String getOffset(ItemStack itemStack) {
+        return BlockPosTools.toString(ShapeCardItem.getOffset(itemStack));
     }
 
     public SpaceChamberCardItem() {
