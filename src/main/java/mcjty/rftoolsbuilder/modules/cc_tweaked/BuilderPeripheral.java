@@ -1,7 +1,10 @@
 package mcjty.rftoolsbuilder.modules.cc_tweaked;
 
-import dan200.computercraft.api.lua.GenericSource;
 import dan200.computercraft.api.lua.LuaFunction;
+import dan200.computercraft.api.peripheral.AttachedComputerSet;
+import dan200.computercraft.api.peripheral.IComputerAccess;
+import dan200.computercraft.api.peripheral.IPeripheral;
+import mcjty.rftoolsbuilder.RFToolsBuilder;
 import mcjty.rftoolsbuilder.modules.builder.BuilderConfiguration;
 import mcjty.rftoolsbuilder.modules.builder.BuilderModule;
 import mcjty.rftoolsbuilder.modules.builder.blocks.AnchorMode;
@@ -12,25 +15,54 @@ import mcjty.rftoolsbuilder.modules.builder.items.ShapeCardItem;
 import mcjty.rftoolsbuilder.shapes.Shape;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
+import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-public class BuilderPeripheral implements GenericSource {
+public class BuilderPeripheral implements IPeripheral {
+
+    private final BuilderTileEntity builder;
+    private final AttachedComputerSet attachedComputers = new AttachedComputerSet();
+
+    public BuilderPeripheral(BuilderTileEntity builder) {
+        this.builder = builder;
+        this.builder.addListener(() -> attachedComputers.queueEvent(RFToolsBuilder.MODID + ":scan_complete"));
+    }
 
     @Override
-    public String id() {
-        return BuilderModule.BUILDER.block().getKey().location().toString();
+    public String getType() {
+        return RFToolsBuilder.MODID + ":builder";
+    }
+
+    @Override
+    public boolean equals(@Nullable IPeripheral other) {
+        return other instanceof BuilderPeripheral b && b.builder == this.builder;
+    }
+
+    @Override
+    public void attach(IComputerAccess computer) {
+        attachedComputers.add(computer);
+    }
+
+    @Override
+    public void detach(IComputerAccess computer) {
+        attachedComputers.remove(computer);
+    }
+
+    @Override
+    public @Nullable Object getTarget() {
+        return builder;
     }
 
     // using "detail" for consistency with other CC APIs
     @LuaFunction(mainThread = true)
-    public Map<String, ?> getBuilderDetail(BuilderTileEntity te) {
+    public Map<String, ?> getBuilderDetail() {
         var res = new HashMap<String, Object>();
 
-        var data = te.getData(BuilderModule.BUILDER_DATA);
+        var data = builder.getData(BuilderModule.BUILDER_DATA);
         res.put("anchor", data.anchor());
         res.put("lastError", data.lastError());
         res.put("maxBox", pos(data.minBox()));
@@ -42,7 +74,7 @@ public class BuilderPeripheral implements GenericSource {
                 "wait", data.flags().waitMode()
         ));
 
-        var card = te.getCard();
+        var card = builder.getCard();
         if (!card.isEmpty()) {
             res.put("shapeCard", shapeCard(card));
         }
@@ -51,28 +83,28 @@ public class BuilderPeripheral implements GenericSource {
     }
 
     @LuaFunction(mainThread = true)
-    public void setWaitMode(BuilderTileEntity te, boolean enable) {
-        updateData(te, data -> data.withWaitMode(enable));
+    public void setWaitMode(boolean enable) {
+        updateData(data -> data.withWaitMode(enable));
     }
 
     @LuaFunction(mainThread = true)
-    public void setLoopMode(BuilderTileEntity te, boolean enable) {
-        updateData(te, data -> data.withLoopMode(enable));
+    public void setLoopMode(boolean enable) {
+        updateData(data -> data.withLoopMode(enable));
     }
 
     @LuaFunction(mainThread = true)
-    public void setRotateMode(BuilderTileEntity te, RotateMode mode) {
-        updateData(te, data -> data.withRotate(mode));
+    public void setRotateMode(RotateMode mode) {
+        updateData(data -> data.withRotate(mode));
     }
 
     @LuaFunction(mainThread = true)
-    public void setAnchorMode(BuilderTileEntity te, AnchorMode anchor) {
-        updateData(te, data -> data.withAnchor(anchor));
+    public void setAnchorMode(AnchorMode anchor) {
+        updateData(data -> data.withAnchor(anchor));
     }
 
     @LuaFunction(mainThread = true)
-    public void setSupportMode(BuilderTileEntity te, boolean enable) {
-        te.setSupportMode(enable);
+    public void setSupportMode(boolean enable) {
+        builder.setSupportMode(enable);
     }
 
     @LuaFunction(mainThread = true)
@@ -83,37 +115,37 @@ public class BuilderPeripheral implements GenericSource {
     }
 
     @LuaFunction(mainThread = true)
-    public boolean setShape(BuilderTileEntity te, Shape shape, boolean solid) {
-        return updateCard(te, card -> ShapeCardItem.setShape(card, shape, solid));
+    public boolean setShape(Shape shape, boolean solid) {
+        return updateCard(card -> ShapeCardItem.setShape(card, shape, solid));
     }
 
     @LuaFunction(mainThread = true)
-    public boolean setDimension(BuilderTileEntity te, int x, int y, int z) {
-        return updateCard(te, card -> ShapeCardItem.setDimension(card, x, y, z));
+    public boolean setDimension(int x, int y, int z) {
+        return updateCard(card -> ShapeCardItem.setDimension(card, x, y, z));
     }
 
     @LuaFunction(mainThread = true)
-    public boolean setOffset(BuilderTileEntity te, int x, int y, int z) {
-        return updateCard(te, card -> ShapeCardItem.setOffset(card, x, y, z));
+    public boolean setOffset(int x, int y, int z) {
+        return updateCard(card -> ShapeCardItem.setOffset(card, x, y, z));
     }
 
-    private boolean updateCard(BuilderTileEntity te, Consumer<ItemStack> update) {
-        var card = te.getCard();
+    private boolean updateCard(Consumer<ItemStack> update) {
+        var card = builder.getCard();
         if (card.isEmpty()) {
             return false;
         }
-        var data = te.getData(BuilderModule.BUILDER_DATA);
-        te.refreshSettings();
+        var data = builder.getData(BuilderModule.BUILDER_DATA);
+        builder.refreshSettings();
         update.accept(card);
         if (data.flags().supportMode()) {
-            te.setSupportMode(true);
+            builder.setSupportMode(true);
         }
         return true;
     }
 
-    private void updateData(BuilderTileEntity te, Function<BuilderData, BuilderData> update) {
-        var data = te.getData(BuilderModule.BUILDER_DATA);
-        te.onDataChanged(data, update.apply(data));
+    private void updateData(Function<BuilderData, BuilderData> update) {
+        var data = builder.getData(BuilderModule.BUILDER_DATA);
+        builder.onDataChanged(data, update.apply(data));
     }
 
     private static Map<String, Object> shapeCard(ItemStack card) {
@@ -135,4 +167,5 @@ public class BuilderPeripheral implements GenericSource {
                 "z", pos.getZ()
         );
     }
+
 }

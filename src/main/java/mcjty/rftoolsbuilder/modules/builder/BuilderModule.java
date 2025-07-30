@@ -77,6 +77,7 @@ public class BuilderModule implements IModule {
             BuilderTileEntity::new
     );
     public static final Supplier<MenuType<GenericContainer>> CONTAINER_BUILDER = CONTAINERS.register("builder", GenericContainer::createContainerType);
+    public static final Supplier<MenuType<GenericContainer>> CONTAINER_COMPOSER = CONTAINERS.register("composer", GenericContainer::createContainerType);
 
     public static final DeferredItem<Item> SUPER_HARVESTING_TOOL = ITEMS.register("superharvestingtool", SuperHarvestingTool::new);
 

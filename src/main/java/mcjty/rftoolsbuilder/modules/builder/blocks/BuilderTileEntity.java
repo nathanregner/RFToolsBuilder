@@ -86,12 +86,14 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 import org.apache.commons.lang3.tuple.Pair;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static mcjty.lib.api.container.DefaultContainerProvider.container;
 import static mcjty.lib.builder.TooltipBuilder.*;
@@ -185,6 +187,8 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
             return (itemStack.getItem() instanceof ShapeCardItem || itemStack.getItem() == BuilderModule.SPACE_CHAMBER_CARD.get());
         }
     };
+
+    private final List<Runnable> listeners = new ArrayList<>();
 
     public BuilderTileEntity(BlockPos pos, BlockState state) {
         super(BuilderModule.BUILDER.be().get(), pos, state);
@@ -702,6 +706,22 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         setData(BuilderModule.BUILDER_DATA, data);
     }
 
+    public void addListener(Runnable runnable) {
+        this.listeners.add(runnable);
+    }
+
+    @Override
+    public <T> @Nullable T setData(@NotNull Supplier<AttachmentType<T>> type, @NotNull T data) {
+        T prevData = super.setData(type, data);
+        if (data instanceof BuilderData next && prevData instanceof BuilderData prev) {
+            if (next.scan() == null && prev.scan() != null) {
+                for (var listener : listeners) {
+                    listener.run();
+                }
+            }
+        }
+        return prevData;
+    }
 
     @Override
     public void tickServer() {
