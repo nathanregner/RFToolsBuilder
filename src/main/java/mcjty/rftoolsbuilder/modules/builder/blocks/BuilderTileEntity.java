@@ -85,6 +85,7 @@ import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
+import org.apache.commons.lang3.text.WordUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 
@@ -471,6 +472,14 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         }
         return false;    }
 
+    private BlockResult waitOrSkip2(BuilderData data, String error) {
+        if (isWaitMode()) {
+            data = data.withLastError(error);
+            return new BlockResult(data, true);
+        }
+        return new BlockResult(data, false);
+    }
+
     private boolean skip(BuilderData data) {
         data = data.withLastError(null);
         setData(BuilderModule.BUILDER_DATA, data);
@@ -770,9 +779,11 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
             collectItems(world);
         } else {
             float factor = infusable.getInfusedFactor();
-            for (int i = 0; i < 2 + (factor * 40); i++) {
-                if (data.scan() != null) {
-                    data = handleBlock(data, world);
+            for (int i = 0; i < 2 + (factor * 40) && data.scan() != null; i++) {
+                var blockResult = handleBlock(data, world);
+                data = blockResult.data();
+                if (blockResult.waiting()) {
+                    break;
                 }
             }
         }
@@ -1070,11 +1081,11 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         BuilderData data = getData(BuilderModule.BUILDER_DATA);
 
         if (isEmptyOrReplacable(level, srcPos)) {
-            TakeableItem item = createTakeableItem(level, srcPos, pickState);
-            ItemStack stack = item.peek();
-            if (stack.isEmpty()) {
-                return waitOrSkip(data, "Cannot find block!\nor missing inventory\non top or below");    // We could not find a block. Wait
+            TakeableItem result = createTakeableItem(level, srcPos, pickState);
+            if (!(result instanceof TakeableItem.Success item)) {
+                return waitOrSkip(data, result.toString()); // We could not find a block. Wait
             }
+            ItemStack stack = item.peek();
 
             Player fakePlayer = harvester.get();
             BlockState newState = Tools.placeStackAt(fakePlayer, stack, level, srcPos, pickState);
@@ -1428,7 +1439,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         return skip(data);
     }
 
-    private BuilderData handleBlock(BuilderData data, Level world) {
+    private BlockResult handleBlock(BuilderData data, Level world) {
         BlockPos srcPos = data.scan();
         BlockPos destPos = sourceToDest(data.scan());
         int x = data.scan().getX();
@@ -1439,7 +1450,12 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         int destZ = destPos.getZ();
 
         switch (getMode()) {
-            case MODE_COPY -> copyBlock(world, srcPos, world, destPos);
+            case MODE_COPY -> {
+                var result = copyBlock(data, world, srcPos, world, destPos);
+                if (result.waiting()) {
+                    return result;
+                }
+            }
             case MODE_MOVE -> {
                 if (hasEntityMode()) {
                     moveEntities(world, x, y, z, world, destX, destY, destZ);
@@ -1461,7 +1477,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         }
 
         data = nextLocation(data);
-        return data;
+        return new BlockResult(data, false);
     }
 
     private static final Random random = new Random();
@@ -1477,8 +1493,10 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
                 }
             }
             if (!slots.isEmpty()) {
-                return new TakeableItem(inventory, slots.get(random.nextInt(slots.size())));
+                return new TakeableItem.Success(inventory, slots.get(random.nextInt(slots.size())));
             }
+
+            return new TakeableItem.Error(null);
         } else {
             Block block = state.getBlock();
             ItemStack srcItem = block.getCloneItemStack(srcWorld, srcPos, state);
@@ -1486,12 +1504,12 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
                 for (int i = 0; i < inventory.getSlots(); i++) {
                     ItemStack stack = inventory.getStackInSlot(i);
                     if (!stack.isEmpty() && ItemStack.isSameItem(stack, srcItem)) {
-                        return new TakeableItem(inventory, i);
+                        return new TakeableItem.Success(inventory, i);
                     }
                 }
             }
+            return new TakeableItem.Error(srcItem);
         }
-        return TakeableItem.EMPTY;
     }
 
     private boolean isPlacable(ItemStack stack) {
@@ -1597,42 +1615,48 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         return s;
     }
 
-    private static class TakeableItem {
-        private final IItemHandler itemHandler;
-        private final int slot;
-        private final ItemStack peekStack;
+    sealed interface TakeableItem {
 
-        public static final TakeableItem EMPTY = new TakeableItem();
-
-        private TakeableItem() {
-            this.itemHandler = null;
-            this.slot = -1;
-            this.peekStack = ItemStack.EMPTY;
-        }
-
-        public TakeableItem(IItemHandler itemHandler, int slot) {
-            Validate.inclusiveBetween(0, itemHandler.getSlots() - 1, slot);
-            this.itemHandler = itemHandler;
-            this.slot = slot;
-            this.peekStack = itemHandler.extractItem(slot, 1, true);
-        }
-
-        public ItemStack peek() {
-            return peekStack.copy();
-        }
-
-        public void take() {
-            if (itemHandler != null) {
-                itemHandler.extractItem(slot, 1, false);
+        record Error(@Nullable ItemStack wanted) implements TakeableItem {
+            @Override
+            public @NotNull String toString() {
+                if (wanted == null) {
+                    return "Missing or empty inventory";
+                }
+                // TODO: less fragile way to wrap text to fit
+                return WordUtils.wrap("Missing " + wanted.getItem().getDescriptionId()
+                        .replaceFirst("^block.", "")
+                        .replaceFirst("^minecraft.", "")
+                        + "!", 20, "\n", true);
             }
         }
 
-        public ItemStack takeAndReplace(ItemStack replacement) {
-            if (itemHandler != null) {
+        final class Success implements TakeableItem {
+            private final IItemHandler itemHandler;
+            private final int slot;
+            private final ItemStack peekStack;
+
+            public Success(IItemHandler itemHandler, int slot) {
+                Validate.inclusiveBetween(0, itemHandler.getSlots() - 1, slot);
+                Validate.notNull(itemHandler, "itemHandler is required");
+                this.itemHandler = itemHandler;
+                this.slot = slot;
+                this.peekStack = itemHandler.extractItem(slot, 1, true);
+                Validate.isTrue(!peekStack.isEmpty());
+            }
+
+            public ItemStack peek() {
+                return peekStack.copy();
+            }
+
+            public void take() {
+                itemHandler.extractItem(slot, 1, false);
+            }
+
+            public ItemStack takeAndReplace(ItemStack replacement) {
                 itemHandler.extractItem(slot, 1, false);
                 return itemHandler.insertItem(slot, replacement, false);
             }
-            return replacement;
         }
     }
 
@@ -1650,7 +1674,7 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
                 return findBlockTakeableItem(h, srcWorld, srcPos, state);
             }
         }
-        return TakeableItem.EMPTY;
+        return null;
     }
 
     @Nonnull
@@ -1693,11 +1717,14 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
     }
 
     private TakeableItem createTakeableItem(Level srcWorld, BlockPos srcPos, BlockState state) {
-        TakeableItem b = createTakeableItem(Direction.UP, srcWorld, srcPos, state);
-        if (b.peek().isEmpty()) {
-            b = createTakeableItem(Direction.DOWN, srcWorld, srcPos, state);
+        TakeableItem up = createTakeableItem(Direction.UP, srcWorld, srcPos, state);
+        TakeableItem down = null;
+        if (!(up instanceof TakeableItem.Success)) {
+            down = createTakeableItem(Direction.DOWN, srcWorld, srcPos, state);
         }
-        return b;
+        if (up != null) return up;
+        if (down != null) return down;
+        return new TakeableItem.Error(null);
     }
 
     public static BlockInformation getBlockInformation(Player fakePlayer, Level world, BlockPos pos, Block block, BlockEntity tileEntity) {
@@ -1778,31 +1805,35 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
         };
     }
 
-    private void copyBlock(Level srcWorld, BlockPos srcPos, Level destWorld, BlockPos destPos) {
+    @NotNull
+    private BlockResult copyBlock(BuilderData data, Level srcWorld, BlockPos srcPos, Level destWorld, BlockPos destPos) {
         long rf = energyStorage.getEnergy();
         float factor = infusable.getInfusedFactor();
         int rfNeeded = (int) (BuilderConfiguration.builderRfPerOperation.get() * getDimensionCostFactor(srcWorld, destWorld) * (4.0f - factor) / 4.0f);
         if (rfNeeded > rf) {
-            // Not enough energy.
-            return;
+            data = data.withLastError("Not enough power!");
+            return new BlockResult(data, true);
         }
 
         if (isEmptyOrReplacable(destWorld, destPos)) {
             if (srcWorld.isEmptyBlock(srcPos)) {
-                return;
+                return new BlockResult(data, false);
             }
             BlockState srcState = srcWorld.getBlockState(srcPos);
-            TakeableItem takeableItem = createTakeableItem(srcWorld, srcPos, srcState);
+            TakeableItem result = createTakeableItem(srcWorld, srcPos, srcState);
+            if (!(result instanceof TakeableItem.Success takeableItem)) {
+                return waitOrSkip2(data, result.toString());
+            }
             ItemStack consumedStack = takeableItem.peek();
             if (consumedStack.isEmpty()) {
-                return;
+                return waitOrSkip2(data, "Item not available!");
             }
 
             Player fakePlayer = harvester.get();
             BlockState newState = Tools.placeStackAt(fakePlayer, consumedStack, destWorld, destPos, srcState);
             if (newState == null) {
                 // This block can't be placed
-                return;
+                return waitOrSkip2(data, "Block can't be placed!");
             }
             if (destWorld.getBlockState(destPos).is(newState.getBlock())) {
                 BlockEntity srcTileEntity = srcWorld.getBlockEntity(srcPos);
@@ -1838,6 +1869,8 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
 
             energyStorage.consumeEnergy(rfNeeded);
         }
+
+        return new BlockResult(data, false);
     }
 
     private double getDimensionCostFactor(Level world, Level destWorld) {
@@ -2467,4 +2500,8 @@ public class BuilderTileEntity extends TickingTileEntity implements IHudSupport 
             }
         };
     }
+
+    record BlockResult(BuilderData data, boolean waiting) {
+    }
+
 }
