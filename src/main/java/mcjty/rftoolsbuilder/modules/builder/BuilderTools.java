@@ -31,7 +31,7 @@ import java.util.Map;
 
 public class BuilderTools {
 
-    public static void returnChamberInfo(Player player) {
+    public static void returnChamberInfo(Player player, int screenId) {
         SpaceChamberRepository.SpaceChamberChannel chamberChannel = getSpaceChamberChannel(player);
         if (chamberChannel == null) return;
 
@@ -53,7 +53,7 @@ public class BuilderTools {
         Map<String, CompoundTag> firstEntity = new HashMap<>();
         findEntities(world, minCorner, maxCorner, entitiesWithCount, entitiesWithCost, firstEntity);
 
-        RFToolsBuilderMessages.sendToPlayer(PacketChamberInfoReady.create(blocks, costs, stacks,
+        RFToolsBuilderMessages.sendToPlayer(PacketChamberInfoReady.create(screenId, blocks, costs, stacks,
                 entitiesWithCount, entitiesWithCost, firstEntity), player);
     }
 

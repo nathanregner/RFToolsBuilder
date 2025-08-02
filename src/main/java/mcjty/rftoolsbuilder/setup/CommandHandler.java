@@ -36,7 +36,7 @@ public class CommandHandler {
             return true;
         });
         McJtyLib.registerCommand(RFToolsBuilder.MODID, CMD_GET_CHAMBER_INFO, (player, arguments) -> {
-            BuilderTools.returnChamberInfo(player);
+            BuilderTools.returnChamberInfo(player, arguments.get(PARAM_ID));
             return true;
         });
         McJtyLib.registerCommand(RFToolsBuilder.MODID, CMD_UNMOUNT, (player, arguments) -> {

@@ -5,6 +5,7 @@ import mcjty.lib.client.RenderHelper;
 import mcjty.lib.gui.*;
 import mcjty.lib.gui.layout.HorizontalAlignment;
 import mcjty.lib.gui.widgets.*;
+import mcjty.lib.typed.TypedMap;
 import mcjty.rftoolsbuilder.modules.builder.items.ShapeCardItem;
 import mcjty.rftoolsbuilder.modules.builder.network.PacketUpdateCardInPlayer;
 import mcjty.rftoolsbuilder.setup.CommandHandler;
@@ -33,13 +34,17 @@ public class GuiChamberDetails extends GuiItemScreen implements IKeyReceiver {
     private static final int CHAMBER_XSIZE = 390;
     private static final int CHAMBER_YSIZE = 210;
 
-    private static Map<BlockState, Integer> items = null;
-    private static Map<BlockState, Integer> costs = null;
-    private static Map<BlockState, ItemStack> stacks = null;
-    private static Map<String, Integer> entities = null;
-    private static Map<String, Integer> entityCosts = null;
-    private static Map<String, CompoundTag> realEntities = null;
-    private static Map<String, String> playerNames = null;
+    private static int NEXT_SCREEN_ID = 0;
+
+    private final int screenId = NEXT_SCREEN_ID++;
+
+    private Map<BlockState, Integer> items = null;
+    private Map<BlockState, Integer> costs = null;
+    private Map<BlockState, ItemStack> stacks = null;
+    private Map<String, Integer> entities = null;
+    private Map<String, Integer> entityCosts = null;
+    private Map<String, CompoundTag> realEntities = null;
+    private Map<String, String> playerNames = null;
 
     private WidgetList blockList;
     private Label infoLabel;
@@ -50,25 +55,29 @@ public class GuiChamberDetails extends GuiItemScreen implements IKeyReceiver {
 
     public GuiChamberDetails() {
         super(CHAMBER_XSIZE, CHAMBER_YSIZE,  /* @todo 1.14 GuiProxy.GUI_MANUAL_SHAPE*/ ManualEntry.EMPTY);
-        requestChamberInfoFromServer();
+        requestChamberInfoFromServer(screenId);
     }
 
-    public static void setItemsWithCount(Map<BlockState, Integer> items, Map<BlockState, Integer> costs,
+    public void setItemsWithCount(Map<BlockState, Integer> items, Map<BlockState, Integer> costs,
                                          Map<BlockState, ItemStack> stacks,
                                          Map<String, Integer> entities, Map<String, Integer> entityCosts,
                                          Map<String, CompoundTag> realEntities,
                                          Map<String, String> playerNames) {
-        GuiChamberDetails.items = new HashMap<>(items);
-        GuiChamberDetails.costs = new HashMap<>(costs);
-        GuiChamberDetails.stacks = new HashMap<>(stacks);
-        GuiChamberDetails.entities = new HashMap<>(entities);
-        GuiChamberDetails.entityCosts = new HashMap<>(entityCosts);
-        GuiChamberDetails.realEntities = new HashMap<>(realEntities);
-        GuiChamberDetails.playerNames = new HashMap<>(playerNames);
+        this.items = new HashMap<>(items);
+        this.costs = new HashMap<>(costs);
+        this.stacks = new HashMap<>(stacks);
+        this.entities = new HashMap<>(entities);
+        this.entityCosts = new HashMap<>(entityCosts);
+        this.realEntities = new HashMap<>(realEntities);
+        this.playerNames = new HashMap<>(playerNames);
     }
 
-    private void requestChamberInfoFromServer() {
-        RFToolsBuilderMessages.sendToServer(CommandHandler.CMD_GET_CHAMBER_INFO);
+    public int getScreenId() {
+        return screenId;
+    }
+
+    private void requestChamberInfoFromServer(int id) {
+        RFToolsBuilderMessages.sendToServer(CommandHandler.CMD_GET_CHAMBER_INFO, TypedMap.builder().put(CommandHandler.PARAM_ID, id));
     }
 
     @Override
@@ -207,7 +216,7 @@ public class GuiChamberDetails extends GuiItemScreen implements IKeyReceiver {
 
     @Override
     protected void renderInternal(GuiGraphics graphics, int pMouseX, int pMouseY, float partialTick) {
-         populateLists();
+        populateLists();
         drawWindow(graphics, pMouseX, pMouseY, partialTick);
     }
 

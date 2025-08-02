@@ -3,6 +3,7 @@ package mcjty.rftoolsbuilder.modules.builder.network;
 import mcjty.lib.varia.CompositeStreamCodec;
 import mcjty.rftoolsbuilder.RFToolsBuilder;
 import mcjty.rftoolsbuilder.modules.builder.client.GuiChamberDetails;
+import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -17,7 +18,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import java.util.HashMap;
 import java.util.Map;
 
-public record PacketChamberInfoReady(Map<BlockState, Integer> blocks,
+public record PacketChamberInfoReady(int screenId,
+                                     Map<BlockState, Integer> blocks,
                                      Map<BlockState, Integer> costs,
                                      Map<BlockState, ItemStack> stacks,
                                      Map<String, Integer> entities,
@@ -33,6 +35,7 @@ public record PacketChamberInfoReady(Map<BlockState, Integer> blocks,
     private static final byte ENTITY_PLAYER = 2;
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketChamberInfoReady> CODEC = CompositeStreamCodec.composite(
+            ByteBufCodecs.INT, PacketChamberInfoReady::screenId,
             ByteBufCodecs.map(HashMap::new, ByteBufCodecs.idMapper(Block.BLOCK_STATE_REGISTRY), ByteBufCodecs.INT), PacketChamberInfoReady::blocks,
             ByteBufCodecs.map(HashMap::new, ByteBufCodecs.idMapper(Block.BLOCK_STATE_REGISTRY), ByteBufCodecs.INT), PacketChamberInfoReady::costs,
             ByteBufCodecs.map(HashMap::new, ByteBufCodecs.idMapper(Block.BLOCK_STATE_REGISTRY), ItemStack.STREAM_CODEC), PacketChamberInfoReady::stacks,
@@ -47,20 +50,19 @@ public record PacketChamberInfoReady(Map<BlockState, Integer> blocks,
         return TYPE;
     }
 
-    public static PacketChamberInfoReady create(Map<BlockState, Integer> blocks, Map<BlockState, Integer> costs,
-                                                Map<BlockState, ItemStack> stacks,
-                                                Map<String, Integer> entities, Map<String, Integer> entityCosts,
-                                                Map<String, CompoundTag> realEntities) {
-        return new PacketChamberInfoReady(
-                new HashMap<>(blocks), new HashMap<>(costs), new HashMap<>(stacks),
-                new HashMap<>(entities), new HashMap<>(entityCosts),
-                new HashMap<>(realEntities), new HashMap<>());
+    public static PacketChamberInfoReady create(int screenId, Map<BlockState, Integer> blocks, Map<BlockState, Integer> costs,
+                                                Map<BlockState, ItemStack> stacks, Map<String, Integer> entities,
+                                                Map<String, Integer> entityCosts, Map<String, CompoundTag> realEntities) {
+        return new PacketChamberInfoReady(screenId, new HashMap<>(blocks), new HashMap<>(costs), new HashMap<>(stacks),
+                new HashMap<>(entities), new HashMap<>(entityCosts), new HashMap<>(realEntities), new HashMap<>());
     }
 
     public void handle(IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            GuiChamberDetails.setItemsWithCount(blocks, costs, stacks,
-                    entities, entityCosts, realEntities, playerNames);
+            if (Minecraft.getInstance().screen instanceof GuiChamberDetails chamberDetails && chamberDetails.getScreenId() == screenId) {
+                chamberDetails.setItemsWithCount(blocks, costs, stacks,
+                        entities, entityCosts, realEntities, playerNames);
+            }
         });
     }
 }
