@@ -172,12 +172,14 @@ public class GuiChamberDetails extends GuiItemScreen implements IKeyReceiver {
                 EntityType<?> value = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id));
 
                 entity = value.create(minecraft.level);
-                entity.load(tag);
-                entityName = entity.getDisplayName().getString();
-                if (entity instanceof ItemEntity entityItem) {
-                    if (!entityItem.getItem().isEmpty()) {
-                        String displayName = entityItem.getItem().getDisplayName().getString();
-                        entityName += " (" + displayName + ")";
+                if (entity != null) {
+                    entity.load(tag);
+                    entityName = entity.getDisplayName().getString();
+                    if (entity instanceof ItemEntity entityItem) {
+                        if (!entityItem.getItem().isEmpty()) {
+                            String displayName = entityItem.getItem().getDisplayName().getString();
+                            entityName += " (" + displayName + ")";
+                        }
                     }
                 }
             } else {
