@@ -18,6 +18,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -73,18 +74,14 @@ public class BuilderPeripheral implements IPeripheral {
                 "support", data.flags().supportMode(),
                 "wait", data.flags().waitMode()
         ));
-
-        var card = builder.getCard();
-        if (!card.isEmpty()) {
-            res.put("shapeCard", shapeCard(card));
-        }
+        res.put("shapeCard", getShapeCardDetail());
 
         return res;
     }
 
     @LuaFunction(mainThread = true)
-    public final void setWaitMode(boolean enable) {
-        updateData(data -> data.withWaitMode(enable));
+    public final void setAnchorMode(AnchorMode anchor) {
+        updateData(data -> data.withAnchor(anchor));
     }
 
     @LuaFunction(mainThread = true)
@@ -98,13 +95,18 @@ public class BuilderPeripheral implements IPeripheral {
     }
 
     @LuaFunction(mainThread = true)
-    public final void setAnchorMode(AnchorMode anchor) {
-        updateData(data -> data.withAnchor(anchor));
+    public final void setSupportMode(boolean enable) {
+        builder.setSupportMode(enable);
     }
 
     @LuaFunction(mainThread = true)
-    public final void setSupportMode(boolean enable) {
-        builder.setSupportMode(enable);
+    public final void setWaitMode(boolean enable) {
+        updateData(data -> data.withWaitMode(enable));
+    }
+
+    private void updateData(Function<BuilderData, BuilderData> update) {
+        var data = builder.getData(BuilderModule.BUILDER_DATA);
+        builder.onDataChanged(data, update.apply(data));
     }
 
     @LuaFunction(mainThread = true)
@@ -112,6 +114,22 @@ public class BuilderPeripheral implements IPeripheral {
         var data = builder.getData(BuilderModule.BUILDER_DATA);
         data = builder.restartScan(data);
         builder.setData(BuilderModule.BUILDER_DATA, data);
+    }
+
+    @LuaFunction(mainThread = true)
+    public final Map<String, Object> getShapeCardDetail() {
+        var card = builder.getCard();
+        if (!card.isEmpty()) {
+            var res = new HashMap<String, Object>();
+            res.put("dimension", pos(ShapeCardItem.getDimension(card)));
+            res.put("maxDimension", BuilderConfiguration.maxBuilderDimension.get());
+            res.put("maxOffset", BuilderConfiguration.maxBuilderOffset.get());
+            res.put("offset", pos(ShapeCardItem.getOffset(card)));
+            res.put("shape", ShapeCardItem.getShape(card).toString());
+            res.put("type", ShapeCardItem.getType(card).toString());
+            return res;
+        }
+        return null;
     }
 
     @LuaFunction(mainThread = true)
@@ -143,29 +161,8 @@ public class BuilderPeripheral implements IPeripheral {
         return true;
     }
 
-    private void updateData(Function<BuilderData, BuilderData> update) {
-        var data = builder.getData(BuilderModule.BUILDER_DATA);
-        builder.onDataChanged(data, update.apply(data));
-    }
-
-    private static Map<String, Object> shapeCard(ItemStack card) {
-        var res = new HashMap<String, Object>();
-        res.put("dimension", pos(ShapeCardItem.getDimension(card)));
-        res.put("maxDimension", BuilderConfiguration.maxBuilderDimension.get());
-        res.put("offset", pos(ShapeCardItem.getOffset(card)));
-        res.put("maxOffset", BuilderConfiguration.maxBuilderOffset.get());
-        res.put("shape", ShapeCardItem.getShape(card));
-        res.put("type", ShapeCardItem.getType(card));
-        return res;
-    }
-
-    private static Map<String, Object> pos(BlockPos pos) {
+    private static List<Integer> pos(BlockPos pos) {
         if (pos == null) return null;
-        return Map.of(
-                "x", pos.getX(),
-                "y", pos.getY(),
-                "z", pos.getZ()
-        );
+        return List.of(pos.getX(), pos.getY(), pos.getZ());
     }
-
 }
